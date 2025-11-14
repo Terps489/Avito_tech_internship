@@ -1,9 +1,11 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/terps489/avito_tech_internship/internal/app"
 	"github.com/terps489/avito_tech_internship/internal/domain"
@@ -194,12 +196,79 @@ func (s *Server) handlePullRequestCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusNotImplemented, ErrorResponse{
-		Error: ErrorPayload{
-			Code:    ErrorCodeNotFound,
-			Message: "not implemented yet",
-		},
-	})
+	var req CreatePRRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "invalid json body",
+			},
+		})
+		return
+	}
+
+	if req.ID == "" || req.Name == "" || req.Author == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "pull_request_id, pull_request_name and author_id are required",
+			},
+		})
+		return
+	}
+
+	pr, err := s.service.CreatePullRequestWithID(
+		domain.PullRequestID(req.ID),
+		req.Name,
+		domain.UserID(req.Author),
+	)
+	if err != nil {
+		if errors.Is(err, app.ErrPRExists) {
+			writeJSON(w, http.StatusConflict, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodePRExists,
+					Message: "PR id already exists",
+				},
+			})
+			return
+		}
+
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNotFound,
+					Message: "author not found",
+				},
+			})
+			return
+		}
+
+		if errors.Is(err, app.ErrAuthorNotActive) {
+			writeJSON(w, http.StatusConflict, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNoCandidate,
+					Message: "author is not active",
+				},
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "internal error: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	resp := struct {
+		PR PullRequestDTO `json:"pr"`
+	}{
+		PR: toPullRequestDTO(pr),
+	}
+
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (s *Server) handlePullRequestMerge(w http.ResponseWriter, r *http.Request) {
@@ -228,4 +297,30 @@ func (s *Server) handlePullRequestReassign(w http.ResponseWriter, r *http.Reques
 			Message: "not implemented yet",
 		},
 	})
+}
+
+func toPullRequestDTO(pr *domain.PullRequest) PullRequestDTO {
+	dto := PullRequestDTO{
+		ID:                string(pr.ID),
+		Name:              pr.Title,
+		AuthorID:          string(pr.AuthorID),
+		Status:            string(pr.Status),
+		AssignedReviewers: make([]string, 0, len(pr.ReviewerIDs)),
+	}
+
+	for _, id := range pr.ReviewerIDs {
+		dto.AssignedReviewers = append(dto.AssignedReviewers, string(id))
+	}
+
+	if !pr.CreatedAt.IsZero() {
+		s := pr.CreatedAt.UTC().Format(time.RFC3339)
+		dto.CreatedAt = &s
+	}
+
+	if pr.MergedAt != nil {
+		s := pr.MergedAt.UTC().Format(time.RFC3339)
+		dto.MergedAt = &s
+	}
+
+	return dto
 }

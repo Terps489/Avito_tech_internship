@@ -15,6 +15,7 @@ var (
 	ErrAuthorNotActive      = errors.New("author is not active")
 	ErrTeamExists           = errors.New("team already exists")
 	ErrTeamNotFound         = errors.New("team not found")
+	ErrPRExists             = errors.New("pull request already exists")
 )
 
 // ---------- Репозитории ----------
@@ -36,6 +37,7 @@ type PullRequestRepository interface {
 	Create(pr *domain.PullRequest) error
 	GetByID(id domain.PullRequestID) (*domain.PullRequest, error)
 	Update(pr *domain.PullRequest) error
+	Exists(id domain.PullRequestID) (bool, error)
 }
 
 // ---------- Service ----------
@@ -90,6 +92,64 @@ func (s *Service) CreateTeamWithMembers(teamName domain.TeamName, members []doma
 	}
 
 	return team, membersFromDB, nil
+}
+
+func (s *Service) CreatePullRequestWithID(
+	id domain.PullRequestID,
+	name string,
+	authorID domain.UserID,
+) (*domain.PullRequest, error) {
+
+	exists, err := s.prs.Exists(id)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrPRExists
+	}
+
+	author, err := s.users.GetByID(authorID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !author.IsActive {
+		return nil, ErrAuthorNotActive
+	}
+
+	candidates, err := s.users.ListActiveByTeam(author.TeamName)
+	if err != nil {
+		return nil, err
+	}
+
+	var reviewerPool []domain.UserID
+	for _, u := range candidates {
+		if u.ID == author.ID {
+			continue
+		}
+		reviewerPool = append(reviewerPool, u.ID)
+	}
+
+	s.shuffleUserIDs(reviewerPool)
+
+	reviewers := make([]domain.UserID, 0, 2)
+	for i := 0; i < len(reviewerPool) && len(reviewers) < 2; i++ {
+		reviewers = append(reviewers, reviewerPool[i])
+	}
+
+	pr := &domain.PullRequest{
+		ID:          id,
+		Title:       name,
+		AuthorID:    authorID,
+		Status:      domain.PRStatusOpen,
+		ReviewerIDs: reviewers,
+	}
+
+	if err := s.prs.Create(pr); err != nil {
+		return nil, err
+	}
+
+	return pr, nil
 }
 
 func (s *Service) GetTeamWithMembers(teamName domain.TeamName) (*domain.Team, []domain.User, error) {

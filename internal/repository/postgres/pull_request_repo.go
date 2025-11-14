@@ -143,3 +143,20 @@ func (r *PullRequestRepository) Update(pr *domain.PullRequest) error {
 
 	return tx.Commit()
 }
+
+func (r *PullRequestRepository) Exists(id domain.PullRequestID) (bool, error) {
+	const query = `
+		SELECT 1
+		FROM pull_requests
+		WHERE pull_request_id = $1
+	`
+	var dummy int
+	err := r.db.QueryRow(query, id).Scan(&dummy)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
