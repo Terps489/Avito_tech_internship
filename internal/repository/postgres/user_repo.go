@@ -56,3 +56,28 @@ func (r *UserRepository) ListActiveByTeam(teamName domain.TeamName) ([]domain.Us
 
 	return users, nil
 }
+
+func (r *UserRepository) UpsertUsersForTeam(teamName domain.TeamName, users []domain.User) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	const query = `
+		INSERT INTO users (user_id, username, is_active, team_name)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (user_id) DO UPDATE
+		SET username = EXCLUDED.username,
+		    is_active = EXCLUDED.is_active,
+		    team_name = EXCLUDED.team_name
+	`
+
+	for _, u := range users {
+		if _, err := tx.Exec(query, u.ID, u.Username, u.IsActive, teamName); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}

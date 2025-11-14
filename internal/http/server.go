@@ -30,7 +30,6 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) registerRoutes() {
-	// Health-check (добавляем сами, в openapi он помечен тегом Health)
 	s.mux.HandleFunc("/health", s.handleHealth)
 
 	// Teams
@@ -58,7 +57,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		// На этом уровне уже поздно что-то делать красиво — просто залогируем.
 		log.Printf("failed to write json response: %v", err)
 	}
 }

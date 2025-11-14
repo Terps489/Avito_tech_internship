@@ -13,15 +13,23 @@ var (
 	ErrReviewerNotAssigned  = errors.New("reviewer is not assigned to pull request")
 	ErrNoAvailableReviewers = errors.New("no available reviewers in team")
 	ErrAuthorNotActive      = errors.New("author is not active")
+	ErrTeamExists           = errors.New("team already exists")
+	ErrTeamNotFound         = errors.New("team not found")
 )
+
+// ---------- Репозитории ----------
 
 type UserRepository interface {
 	GetByID(id domain.UserID) (*domain.User, error)
 	ListActiveByTeam(teamName domain.TeamName) ([]domain.User, error)
+	UpsertUsersForTeam(teamName domain.TeamName, users []domain.User) error
 }
 
 type TeamRepository interface {
 	GetByName(name domain.TeamName) (*domain.Team, error)
+	Create(name domain.TeamName) error
+	Exists(name domain.TeamName) (bool, error)
+	ListMembers(name domain.TeamName) ([]domain.User, error)
 }
 
 type PullRequestRepository interface {
@@ -29,6 +37,8 @@ type PullRequestRepository interface {
 	GetByID(id domain.PullRequestID) (*domain.PullRequest, error)
 	Update(pr *domain.PullRequest) error
 }
+
+// ---------- Service ----------
 
 type Service struct {
 	users UserRepository
@@ -45,6 +55,66 @@ func NewService(u UserRepository, t TeamRepository, p PullRequestRepository) *Se
 		rnd:   rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
+
+// ---------- Команды ----------
+
+func (s *Service) CreateTeamWithMembers(teamName domain.TeamName, members []domain.User) (*domain.Team, []domain.User, error) {
+	exists, err := s.teams.Exists(teamName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if exists {
+		return nil, nil, ErrTeamExists
+	}
+
+	if err := s.teams.Create(teamName); err != nil {
+		return nil, nil, err
+	}
+
+	for i := range members {
+		members[i].TeamName = teamName
+	}
+
+	if err := s.users.UpsertUsersForTeam(teamName, members); err != nil {
+		return nil, nil, err
+	}
+
+	team, err := s.teams.GetByName(teamName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	membersFromDB, err := s.teams.ListMembers(teamName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return team, membersFromDB, nil
+}
+
+func (s *Service) GetTeamWithMembers(teamName domain.TeamName) (*domain.Team, []domain.User, error) {
+	exists, err := s.teams.Exists(teamName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !exists {
+		return nil, nil, ErrTeamNotFound
+	}
+
+	team, err := s.teams.GetByName(teamName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	members, err := s.teams.ListMembers(teamName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return team, members, nil
+}
+
+// ---------- PR: создание / переназначение / merge ----------
 
 func (s *Service) CreatePullRequest(authorID domain.UserID, title string) (*domain.PullRequest, error) {
 	author, err := s.users.GetByID(authorID)
