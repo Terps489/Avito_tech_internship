@@ -220,14 +220,14 @@ func (s *Service) CreatePullRequest(authorID domain.UserID, title string) (*doma
 	return pr, nil
 }
 
-func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID domain.UserID) (*domain.PullRequest, error) {
+func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID domain.UserID) (*domain.PullRequest, domain.UserID, error) {
 	pr, err := s.prs.GetByID(prID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if pr.Status == domain.PRStatusMerged {
-		return nil, ErrPRAlreadyMerged
+		return nil, "", ErrPRAlreadyMerged
 	}
 
 	idx := -1
@@ -238,17 +238,17 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 		}
 	}
 	if idx == -1 {
-		return nil, ErrReviewerNotAssigned
+		return nil, "", ErrReviewerNotAssigned
 	}
 
 	reviewer, err := s.users.GetByID(oldReviewerID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	candidates, err := s.users.ListActiveByTeam(reviewer.TeamName)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	exclude := make(map[domain.UserID]struct{}, len(pr.ReviewerIDs)+1)
@@ -256,6 +256,7 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 		exclude[id] = struct{}{}
 	}
 	exclude[oldReviewerID] = struct{}{}
+	exclude[pr.AuthorID] = struct{}{}
 
 	var pool []domain.UserID
 	for _, u := range candidates {
@@ -266,7 +267,7 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 	}
 
 	if len(pool) == 0 {
-		return nil, ErrNoAvailableReviewers
+		return nil, "", ErrNoAvailableReviewers
 	}
 
 	newReviewerID := pool[s.rnd.Intn(len(pool))]
@@ -274,10 +275,10 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 	pr.ReviewerIDs[idx] = newReviewerID
 
 	if err := s.prs.Update(pr); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return pr, nil
+	return pr, newReviewerID, nil
 }
 
 func (s *Service) MergePullRequest(prID domain.PullRequestID) (*domain.PullRequest, error) {

@@ -277,12 +277,56 @@ func (s *Server) handlePullRequestMerge(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusNotImplemented, ErrorResponse{
-		Error: ErrorPayload{
-			Code:    ErrorCodeNotFound,
-			Message: "not implemented yet",
-		},
-	})
+	var req MergePRRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "invalid json body",
+			},
+		})
+		return
+	}
+
+	if req.ID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "pull_request_id is required",
+			},
+		})
+		return
+	}
+
+	pr, err := s.service.MergePullRequest(domain.PullRequestID(req.ID))
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNotFound,
+					Message: "pull request not found",
+				},
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "internal error: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	resp := struct {
+		PR PullRequestDTO `json:"pr"`
+	}{
+		PR: toPullRequestDTO(pr),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handlePullRequestReassign(w http.ResponseWriter, r *http.Request) {
@@ -291,12 +335,90 @@ func (s *Server) handlePullRequestReassign(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusNotImplemented, ErrorResponse{
-		Error: ErrorPayload{
-			Code:    ErrorCodeNotFound,
-			Message: "not implemented yet",
-		},
-	})
+	var req ReassignReviewerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "invalid json body",
+			},
+		})
+		return
+	}
+
+	if req.PRID == "" || req.OldUserID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "pull_request_id and old_user_id are required",
+			},
+		})
+		return
+	}
+
+	pr, replacedBy, err := s.service.ReassignReviewer(
+		domain.PullRequestID(req.PRID),
+		domain.UserID(req.OldUserID),
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNotFound,
+					Message: "pull request or user not found",
+				},
+			})
+			return
+		}
+
+		if errors.Is(err, app.ErrPRAlreadyMerged) {
+			writeJSON(w, http.StatusConflict, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodePRMerged,
+					Message: "cannot reassign on merged PR",
+				},
+			})
+			return
+		}
+
+		if errors.Is(err, app.ErrReviewerNotAssigned) {
+			writeJSON(w, http.StatusConflict, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNotAssigned,
+					Message: "reviewer is not assigned to this PR",
+				},
+			})
+			return
+		}
+
+		if errors.Is(err, app.ErrNoAvailableReviewers) {
+			writeJSON(w, http.StatusConflict, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNoCandidate,
+					Message: "no active replacement candidate in team",
+				},
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "internal error: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	resp := struct {
+		PR         PullRequestDTO `json:"pr"`
+		ReplacedBy string         `json:"replaced_by"`
+	}{
+		PR:         toPullRequestDTO(pr),
+		ReplacedBy: string(replacedBy),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func toPullRequestDTO(pr *domain.PullRequest) PullRequestDTO {
