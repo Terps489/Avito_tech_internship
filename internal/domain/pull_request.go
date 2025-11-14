@@ -1,6 +1,8 @@
 package domain
 
-type PullRequestID int64
+import "time"
+
+type PullRequestID string
 
 type PRStatus string
 
@@ -14,5 +16,7 @@ type PullRequest struct {
 	Title       string
 	AuthorID    UserID
 	Status      PRStatus
-	ReviewerIDs []UserID // max reviewers: 2
+	ReviewerIDs []UserID
+	CreatedAt   time.Time
+	MergedAt    *time.Time
 }

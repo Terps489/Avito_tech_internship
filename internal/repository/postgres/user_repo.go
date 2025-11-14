@@ -16,27 +16,27 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 
 func (r *UserRepository) GetByID(id domain.UserID) (*domain.User, error) {
 	const query = `
-		SELECT id, name, is_active, team_id
+		SELECT user_id, username, is_active, team_name
 		FROM users
-		WHERE id = $1
+		WHERE user_id = $1
 	`
 
 	var u domain.User
-	err := r.db.QueryRow(query, id).Scan(&u.ID, &u.Name, &u.IsActive, &u.TeamID)
+	err := r.db.QueryRow(query, id).Scan(&u.ID, &u.Username, &u.IsActive, &u.TeamName)
 	if err != nil {
 		return nil, err
 	}
 	return &u, nil
 }
 
-func (r *UserRepository) ListActiveByTeam(teamID domain.TeamID) ([]domain.User, error) {
+func (r *UserRepository) ListActiveByTeam(teamName domain.TeamName) ([]domain.User, error) {
 	const query = `
-		SELECT id, name, is_active, team_id
+		SELECT user_id, username, is_active, team_name
 		FROM users
-		WHERE team_id = $1 AND is_active = TRUE
+		WHERE team_name = $1 AND is_active = TRUE
 	`
 
-	rows, err := r.db.Query(query, teamID)
+	rows, err := r.db.Query(query, teamName)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (r *UserRepository) ListActiveByTeam(teamID domain.TeamID) ([]domain.User, 
 	var users []domain.User
 	for rows.Next() {
 		var u domain.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.IsActive, &u.TeamID); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.TeamName); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

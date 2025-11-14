@@ -14,15 +14,15 @@ func NewTeamRepository(db *sql.DB) *TeamRepository {
 	return &TeamRepository{db: db}
 }
 
-func (r *TeamRepository) GetByID(id domain.TeamID) (*domain.Team, error) {
+func (r *TeamRepository) GetByName(name domain.TeamName) (*domain.Team, error) {
 	const query = `
-		SELECT id, name
+		SELECT team_name
 		FROM teams
-		WHERE id = $1
+		WHERE team_name = $1
 	`
 
 	var t domain.Team
-	err := r.db.QueryRow(query, id).Scan(&t.ID, &t.Name)
+	err := r.db.QueryRow(query, name).Scan(&t.Name)
 	if err != nil {
 		return nil, err
 	}

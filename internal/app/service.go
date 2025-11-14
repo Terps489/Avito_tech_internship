@@ -8,7 +8,6 @@ import (
 	"github.com/terps489/avito_tech_internship/internal/domain"
 )
 
-// Доменные ошибки
 var (
 	ErrPRAlreadyMerged      = errors.New("pull request is already merged")
 	ErrReviewerNotAssigned  = errors.New("reviewer is not assigned to pull request")
@@ -18,11 +17,11 @@ var (
 
 type UserRepository interface {
 	GetByID(id domain.UserID) (*domain.User, error)
-	ListActiveByTeam(teamID domain.TeamID) ([]domain.User, error)
+	ListActiveByTeam(teamName domain.TeamName) ([]domain.User, error)
 }
 
 type TeamRepository interface {
-	GetByID(id domain.TeamID) (*domain.Team, error)
+	GetByName(name domain.TeamName) (*domain.Team, error)
 }
 
 type PullRequestRepository interface {
@@ -31,7 +30,6 @@ type PullRequestRepository interface {
 	Update(pr *domain.PullRequest) error
 }
 
-// Service logical layer
 type Service struct {
 	users UserRepository
 	teams TeamRepository
@@ -44,7 +42,7 @@ func NewService(u UserRepository, t TeamRepository, p PullRequestRepository) *Se
 		users: u,
 		teams: t,
 		prs:   p,
-		rnd:   rand.New(rand.NewSource(time.Now().UnixNano())), // Maximum randomness
+		rnd:   rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -58,7 +56,7 @@ func (s *Service) CreatePullRequest(authorID domain.UserID, title string) (*doma
 		return nil, ErrAuthorNotActive
 	}
 
-	candidates, err := s.users.ListActiveByTeam(author.TeamID)
+	candidates, err := s.users.ListActiveByTeam(author.TeamName)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +65,7 @@ func (s *Service) CreatePullRequest(authorID domain.UserID, title string) (*doma
 	for _, u := range candidates {
 		if u.ID == author.ID {
 			continue
-		} // skip the author
+		}
 		reviewerPool = append(reviewerPool, u.ID)
 	}
 
@@ -102,7 +100,6 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 		return nil, ErrPRAlreadyMerged
 	}
 
-	// find old reviewer index
 	idx := -1
 	for i, id := range pr.ReviewerIDs {
 		if id == oldReviewerID {
@@ -114,18 +111,16 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 		return nil, ErrReviewerNotAssigned
 	}
 
-	// get old reviewer to find team
 	reviewer, err := s.users.GetByID(oldReviewerID)
 	if err != nil {
 		return nil, err
 	}
 
-	candidates, err := s.users.ListActiveByTeam(reviewer.TeamID)
+	candidates, err := s.users.ListActiveByTeam(reviewer.TeamName)
 	if err != nil {
 		return nil, err
 	}
 
-	// new candidate pool excludes current reviewers and old reviewer
 	exclude := make(map[domain.UserID]struct{}, len(pr.ReviewerIDs)+1)
 	for _, id := range pr.ReviewerIDs {
 		exclude[id] = struct{}{}
@@ -144,7 +139,6 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 		return nil, ErrNoAvailableReviewers
 	}
 
-	//again random
 	newReviewerID := pool[s.rnd.Intn(len(pool))]
 
 	pr.ReviewerIDs[idx] = newReviewerID
@@ -156,7 +150,6 @@ func (s *Service) ReassignReviewer(prID domain.PullRequestID, oldReviewerID doma
 	return pr, nil
 }
 
-// переводит PR в статус MERGED.
 func (s *Service) MergePullRequest(prID domain.PullRequestID) (*domain.PullRequest, error) {
 	pr, err := s.prs.GetByID(prID)
 	if err != nil {
@@ -164,7 +157,6 @@ func (s *Service) MergePullRequest(prID domain.PullRequestID) (*domain.PullReque
 	}
 
 	if pr.Status == domain.PRStatusMerged {
-		// nothing to do
 		return pr, nil
 	}
 
@@ -177,7 +169,6 @@ func (s *Service) MergePullRequest(prID domain.PullRequestID) (*domain.PullReque
 	return pr, nil
 }
 
-// randomly shuffles user IDs in place
 func (s *Service) shuffleUserIDs(ids []domain.UserID) {
 	if len(ids) < 2 {
 		return

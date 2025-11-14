@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -17,7 +18,6 @@ type Config struct {
 	DBName   string
 }
 
-// Подключение к постгресу с конфигом из переменных окружения
 func NewFromEnv() (*sql.DB, error) {
 	cfg := Config{
 		Host:     getEnv("DB_HOST", "localhost"),
@@ -43,12 +43,21 @@ func NewFromEnv() (*sql.DB, error) {
 		return nil, fmt.Errorf("sql open: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("sql ping: %w", err)
+	// Wait for the database to be ready
+	const (
+		maxAttempts = 10
+		delay       = time.Second
+	)
+
+	for i := 1; i <= maxAttempts; i++ {
+		if err := db.Ping(); err == nil {
+			return db, nil
+		}
+		time.Sleep(delay)
 	}
 
-	return db, nil
+	db.Close()
+	return nil, fmt.Errorf("sql ping: database is not ready after %d attempts", maxAttempts)
 }
 
 func getEnv(key, def string) string {

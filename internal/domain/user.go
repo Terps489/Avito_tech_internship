@@ -1,10 +1,11 @@
 package domain
 
-type UserID int64
+type UserID string
+type TeamName string
 
 type User struct {
 	ID       UserID
-	Name     string
+	Username string
 	IsActive bool
-	TeamID   TeamID
+	TeamName TeamName
 }
