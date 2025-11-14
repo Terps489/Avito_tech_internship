@@ -166,12 +166,55 @@ func (s *Server) handleUserSetIsActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusNotImplemented, ErrorResponse{
-		Error: ErrorPayload{
-			Code:    ErrorCodeNotFound,
-			Message: "not implemented yet",
-		},
-	})
+	var req SetIsActiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "invalid json body",
+			},
+		})
+		return
+	}
+
+	if req.UserID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "user_id is required",
+			},
+		})
+		return
+	}
+
+	u, err := s.service.SetUserIsActive(domain.UserID(req.UserID), req.IsActive)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, ErrorResponse{
+				Error: ErrorPayload{
+					Code:    ErrorCodeNotFound,
+					Message: "user not found",
+				},
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "internal error: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	resp := struct {
+		User UserDTO `json:"user"`
+	}{
+		User: toUserDTO(u),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleUserGetReview(w http.ResponseWriter, r *http.Request) {
@@ -180,12 +223,46 @@ func (s *Server) handleUserGetReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusNotImplemented, ErrorResponse{
-		Error: ErrorPayload{
-			Code:    ErrorCodeNotFound,
-			Message: "not implemented yet",
-		},
-	})
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "user_id query param is required",
+			},
+		})
+		return
+	}
+
+	prs, err := s.service.ListPullRequestsForReviewer(domain.UserID(userID))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "internal error: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	resp := struct {
+		UserID       string                `json:"user_id"`
+		PullRequests []PullRequestShortDTO `json:"pull_requests"`
+	}{
+		UserID:       userID,
+		PullRequests: make([]PullRequestShortDTO, 0, len(prs)),
+	}
+
+	for _, pr := range prs {
+		resp.PullRequests = append(resp.PullRequests, PullRequestShortDTO{
+			ID:       string(pr.ID),
+			Name:     pr.Title,
+			AuthorID: string(pr.AuthorID),
+			Status:   string(pr.Status),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ---------- Pull Requests ----------
@@ -445,4 +522,13 @@ func toPullRequestDTO(pr *domain.PullRequest) PullRequestDTO {
 	}
 
 	return dto
+}
+
+func toUserDTO(u *domain.User) UserDTO {
+	return UserDTO{
+		UserID:   string(u.ID),
+		Username: u.Username,
+		TeamName: string(u.TeamName),
+		IsActive: u.IsActive,
+	}
 }

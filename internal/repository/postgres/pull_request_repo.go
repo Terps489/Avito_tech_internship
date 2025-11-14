@@ -160,3 +160,33 @@ func (r *PullRequestRepository) Exists(id domain.PullRequestID) (bool, error) {
 	}
 	return true, nil
 }
+
+func (r *PullRequestRepository) ListByReviewer(userID domain.UserID) ([]domain.PullRequest, error) {
+	const query = `
+		SELECT pr.pull_request_id, pr.pull_request_name, pr.author_id, pr.status
+		FROM pull_requests pr
+		JOIN pull_request_reviewers r ON r.pr_id = pr.pull_request_id
+		WHERE r.reviewer_id = $1
+		ORDER BY pr.pull_request_id
+	`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.PullRequest
+	for rows.Next() {
+		var pr domain.PullRequest
+		if err := rows.Scan(&pr.ID, &pr.Title, &pr.AuthorID, &pr.Status); err != nil {
+			return nil, err
+		}
+		result = append(result, pr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}

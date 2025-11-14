@@ -81,3 +81,26 @@ func (r *UserRepository) UpsertUsersForTeam(teamName domain.TeamName, users []do
 
 	return tx.Commit()
 }
+
+func (r *UserRepository) SetIsActive(id domain.UserID, active bool) error {
+	const query = `
+		UPDATE users
+		SET is_active = $2
+		WHERE user_id = $1
+	`
+
+	res, err := r.db.Exec(query, id, active)
+	if err != nil {
+		return err
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}

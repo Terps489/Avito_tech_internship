@@ -24,6 +24,7 @@ type UserRepository interface {
 	GetByID(id domain.UserID) (*domain.User, error)
 	ListActiveByTeam(teamName domain.TeamName) ([]domain.User, error)
 	UpsertUsersForTeam(teamName domain.TeamName, users []domain.User) error
+	SetIsActive(id domain.UserID, active bool) error
 }
 
 type TeamRepository interface {
@@ -38,6 +39,11 @@ type PullRequestRepository interface {
 	GetByID(id domain.PullRequestID) (*domain.PullRequest, error)
 	Update(pr *domain.PullRequest) error
 	Exists(id domain.PullRequestID) (bool, error)
+	ListByReviewer(userID domain.UserID) ([]domain.PullRequest, error)
+}
+
+func (s *Service) ListPullRequestsForReviewer(userID domain.UserID) ([]domain.PullRequest, error) {
+	return s.prs.ListByReviewer(userID)
 }
 
 // ---------- Service ----------
@@ -172,6 +178,19 @@ func (s *Service) GetTeamWithMembers(teamName domain.TeamName) (*domain.Team, []
 	}
 
 	return team, members, nil
+}
+
+func (s *Service) SetUserIsActive(id domain.UserID, active bool) (*domain.User, error) {
+	if err := s.users.SetIsActive(id, active); err != nil {
+		return nil, err
+	}
+
+	u, err := s.users.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return u, nil
 }
 
 // ---------- PR: создание / переназначение / merge ----------
