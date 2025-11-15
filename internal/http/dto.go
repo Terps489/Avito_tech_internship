@@ -82,3 +82,9 @@ type ReassignReviewerRequest struct {
 	PRID      string `json:"pull_request_id"`
 	OldUserID string `json:"old_user_id"`
 }
+
+// --- Stats DTO ---
+type ReviewerAssignmentDTO struct {
+	UserID string `json:"user_id"`
+	Count  int64  `json:"count"`
+}

@@ -190,3 +190,32 @@ func (r *PullRequestRepository) ListByReviewer(userID domain.UserID) ([]domain.P
 
 	return result, nil
 }
+
+func (r *PullRequestRepository) GetReviewerAssignmentStats() ([]domain.ReviewerAssignmentStat, error) {
+	const query = `
+		SELECT reviewer_id, COUNT(*) as cnt
+		FROM pull_request_reviewers
+		GROUP BY reviewer_id
+		ORDER BY reviewer_id
+	`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []domain.ReviewerAssignmentStat
+	for rows.Next() {
+		var s domain.ReviewerAssignmentStat
+		if err := rows.Scan(&s.UserID, &s.Count); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return stats, nil
+}

@@ -532,3 +532,36 @@ func toUserDTO(u *domain.User) UserDTO {
 		IsActive: u.IsActive,
 	}
 }
+
+func (s *Server) handleStatsAssignments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	stats, err := s.service.GetReviewerAssignmentStats()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorPayload{
+				Code:    ErrorCodeNotFound,
+				Message: "internal error: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	resp := struct {
+		ReviewerAssignments []ReviewerAssignmentDTO `json:"reviewer_assignments"`
+	}{
+		ReviewerAssignments: make([]ReviewerAssignmentDTO, 0, len(stats)),
+	}
+
+	for _, s := range stats {
+		resp.ReviewerAssignments = append(resp.ReviewerAssignments, ReviewerAssignmentDTO{
+			UserID: string(s.UserID),
+			Count:  s.Count,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}

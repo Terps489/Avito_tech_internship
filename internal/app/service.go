@@ -40,10 +40,15 @@ type PullRequestRepository interface {
 	Update(pr *domain.PullRequest) error
 	Exists(id domain.PullRequestID) (bool, error)
 	ListByReviewer(userID domain.UserID) ([]domain.PullRequest, error)
+	GetReviewerAssignmentStats() ([]domain.ReviewerAssignmentStat, error)
 }
 
 func (s *Service) ListPullRequestsForReviewer(userID domain.UserID) ([]domain.PullRequest, error) {
 	return s.prs.ListByReviewer(userID)
+}
+
+func (s *Service) GetReviewerAssignmentStats() ([]domain.ReviewerAssignmentStat, error) {
+	return s.prs.GetReviewerAssignmentStats()
 }
 
 // ---------- Service ----------

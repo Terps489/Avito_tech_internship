@@ -36,6 +36,9 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/team/add", s.handleTeamAdd)
 	s.mux.HandleFunc("/team/get", s.handleTeamGet)
 
+	// Stats
+	s.mux.HandleFunc("/stats/assignments", s.handleStatsAssignments)
+
 	// Users
 	s.mux.HandleFunc("/users/setIsActive", s.handleUserSetIsActive)
 	s.mux.HandleFunc("/users/getReview", s.handleUserGetReview)
