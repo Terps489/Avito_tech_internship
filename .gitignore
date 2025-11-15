@@ -1,0 +1,12 @@
+bin/
+vendor/
+*.exe
+*.test
+*.out
+
+.vscode/
+.idea/
+
+*.log
+
+docker-data/
