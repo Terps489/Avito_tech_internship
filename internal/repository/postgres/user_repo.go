@@ -40,7 +40,9 @@ func (r *UserRepository) ListActiveByTeam(teamName domain.TeamName) ([]domain.Us
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var users []domain.User
 	for rows.Next() {
@@ -62,7 +64,9 @@ func (r *UserRepository) UpsertUsersForTeam(teamName domain.TeamName, users []do
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	const query = `
 		INSERT INTO users (user_id, username, is_active, team_name)

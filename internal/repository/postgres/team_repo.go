@@ -67,7 +67,9 @@ func (r *TeamRepository) ListMembers(name domain.TeamName) ([]domain.User, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var users []domain.User
 	for rows.Next() {

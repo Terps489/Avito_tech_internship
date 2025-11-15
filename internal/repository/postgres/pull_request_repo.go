@@ -20,7 +20,9 @@ func (r *PullRequestRepository) Create(pr *domain.PullRequest) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	const insertPR = `
 		INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status)
@@ -76,7 +78,9 @@ func (r *PullRequestRepository) GetByID(id domain.PullRequestID) (*domain.PullRe
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var rid domain.UserID
@@ -97,7 +101,9 @@ func (r *PullRequestRepository) Update(pr *domain.PullRequest) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	const updatePR = `
 		UPDATE pull_requests
@@ -174,7 +180,9 @@ func (r *PullRequestRepository) ListByReviewer(userID domain.UserID) ([]domain.P
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var result []domain.PullRequest
 	for rows.Next() {
@@ -203,7 +211,9 @@ func (r *PullRequestRepository) GetReviewerAssignmentStats() ([]domain.ReviewerA
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var stats []domain.ReviewerAssignmentStat
 	for rows.Next() {

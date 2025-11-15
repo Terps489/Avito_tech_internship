@@ -56,7 +56,7 @@ func NewFromEnv() (*sql.DB, error) {
 		time.Sleep(delay)
 	}
 
-	db.Close()
+	_ = db.Close()
 	return nil, fmt.Errorf("sql ping: database is not ready after %d attempts", maxAttempts)
 }
 
